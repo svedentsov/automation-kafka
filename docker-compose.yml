@@ -1,0 +1,82 @@
+version: '3.3'
+
+services:
+
+  # --- Сервис Zookeeper ---
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.1 # Используем образ Confluent для Zookeeper
+    container_name: zookeeper-container # Имя контейнера для Zookeeper
+    hostname: zookeeper # Устанавливаем имя хоста
+    ports:
+      - "2181:2181" # Открываем порт 2181 для подключения клиентов
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181 # Порт для клиентских подключений
+      ZOOKEEPER_TICK_TIME: 2000 # Время тика в миллисекундах
+
+  # --- Сервис Kafka ---
+  kafka:
+    image: confluentinc/cp-kafka:7.4.1 # Используем образ Confluent для Kafka
+    container_name: kafka-container # Имя контейнера для Kafka
+    hostname: kafka # Устанавливаем имя хоста
+    depends_on:
+      - zookeeper # Kafka зависит от Zookeeper
+    ports:
+      - "9092:9092" # Открываем порт 9092 для подключения клиентов
+    environment:
+      KAFKA_BROKER_ID: 1 # Устанавливаем уникальный идентификатор брокера Kafka
+      KAFKA_CREATE_TOPICS: 'topic_user' # Создаем топик 'topic_user' при старте
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181' # Подключение к Zookeeper
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT # Протокол безопасности
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092 # Адреса слушателей
+      KAFKA_METRICS_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter # Репортер метрик
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1 # Репликация для оффсетных топиков
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0 # Задержка на инициализацию ребалансировки группы
+      KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1 # Репликация для топика лицензий Confluent
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1 # Минимальное количество реплик для логов транзакций
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1 # Репликация для логов транзакций
+      KAFKA_LOG_RETENTION_MS: 604800000 # Время хранения логов (7 дней)
+      CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: kafka:29092 # Адрес Kafka для репортеров
+      CONFLUENT_METRICS_REPORTER_ZOOKEEPER_CONNECT: zookeeper:2181 # Подключение к Zookeeper для репортеров
+      CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1 # Репликация для топика метрик
+      CONFLUENT_METRICS_ENABLE: 'true' # Включаем сбор метрик
+      CONFLUENT_SUPPORT_CUSTOMER_ID: 'anonymous' # ID клиента для поддержки Confluent
+
+  # --- Сервис Schema Registry ---
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.4.1 # Используем образ Schema Registry
+    container_name: schema-registry-container # Имя контейнера для Schema Registry
+    hostname: schema-registry # Устанавливаем имя хоста
+    depends_on:
+      - zookeeper # Зависимость от Zookeeper
+      - kafka # Зависимость от Kafka
+    ports:
+      - "8081:8081" # Открываем порт 8081 для подключения к Schema Registry
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry # Имя хоста для Schema Registry
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: "zookeeper:2181" # Подключение к Zookeeper для хранения схем
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "kafka:29092" # Подключение к Kafka для Schema Registry
+      SCHEMA_REGISTRY_LISTENER_SECURITY_PROTOCOL: PLAINTEXT # Протокол безопасности (если не используете SSL/SASL)
+
+  # --- Сервис Control Center ---
+  control-center:
+    image: confluentinc/cp-enterprise-control-center:7.4.1 # Используем образ Control Center
+    container_name: control-center-container # Имя контейнера для Control Center
+    hostname: control-center # Устанавливаем имя хоста
+    depends_on:
+      - zookeeper # Зависимость от Zookeeper
+      - kafka # Зависимость от Kafka
+      - schema-registry # Зависимость от Schema Registry
+    ports:
+      - "9021:9021" # Открываем порт 9021 для подключения к Control Center
+    environment:
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: 'kafka:29092' # Адрес Kafka для Control Center
+      CONTROL_CENTER_ZOOKEEPER_CONNECT: 'zookeeper:2181' # Адрес Zookeeper для Control Center
+      CONTROL_CENTER_CONNECT_CLUSTER: 'connect:8083' # Адрес для Kafka Connect
+      CONTROL_CENTER_KSQL_KSQLDB1_URL: "http://ksqldb-server:8088" # URL для KSQL
+      CONTROL_CENTER_KSQL_KSQLDB1_ADVERTISED_URL: "http://localhost:8088" # Адрес KSQL для Control Center
+      CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081" # URL для Schema Registry
+      CONTROL_CENTER_REPLICATION_FACTOR: 1 # Репликация для внутренних топиков Control Center
+      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1 # Количество партиций для внутренних топиков
+      CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1 # Количество партиций для топиков мониторинга
+      CONFLUENT_METRICS_TOPIC_REPLICATION: 1 # Репликация для топика метрик
+      PORT: 9021 # Порт для доступа к Control Center

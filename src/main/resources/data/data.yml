@@ -1,0 +1,4 @@
+host: "127.0.0.1:9092"
+topic: "topic_user"
+name: "ivan"
+email: "ivan@gmail.com"
